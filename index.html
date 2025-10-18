@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Average Entry Price Calculator (Any Coin)</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f9f9f9;
+      max-width: 500px;
+      margin: auto;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    h2 {
+      text-align: center;
+      color: #333;
+    }
+    label {
+      font-weight: bold;
+      display: block;
+      margin-top: 10px;
+    }
+    input, button {
+      width: 100%;
+      padding: 10px;
+      margin: 6px 0;
+      font-size: 16px;
+    }
+    button {
+      background-color: #007BFF;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    .result {
+      margin-top: 20px;
+      font-weight: bold;
+      background: #e0f7fa;
+      padding: 12px;
+      border-radius: 5px;
+      color: #006064;
+    }
+    .switch-label {
+      display: flex;
+      align-items: center;
+      margin-top: 10px;
+    }
+    .slider-container {
+      margin-top: 10px;
+    }
+    .slider-value {
+      font-weight: bold;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Average Entry Price Calculator</h2>
+
+  <label for="symbol">Token Symbol (e.g. BTCUSDT)</label>
+  <input type="text" id="symbol" placeholder="e.g. BTCUSDT">
+
+  <button onclick="fetchMarketPrice()">Get Current Market Price</button>
+
+  <label for="entryPrice">Original Entry Price</label>
+  <input type="number" id="entryPrice" placeholder="e.g. 2.53" step="0.0001">
+
+  <label for="quantity">Original Quantity</label>
+  <input type="number" id="quantity" placeholder="e.g. 1000" step="0.0001">
+
+  <label for="newPrice">New Market Price (for averaging)</label>
+  <input type="number" id="newPrice" placeholder="e.g. 2.10" step="0.0001">
+
+  <div class="switch-label">
+    <label for="manualToggle" style="margin-right: 10px;">Enable Manual Target Average Entry</label>
+    <input type="checkbox" id="manualToggle" onchange="toggleTargetMode()" checked>
+  </div>
+
+  <div id="manualTargetContainer">
+    <label for="targetAverage">Target Average Entry Price</label>
+    <input type="number" id="targetAverage" placeholder="e.g. 2.30" step="0.0001">
+  </div>
+
+  <div id="sliderTargetContainer" style="display:none;" class="slider-container">
+    <label for="targetSlider">Target Average Entry Price (Slider)</label>
+    <input type="range" id="targetSlider" min="0" max="1" step="0.0001" oninput="updateTargetFromSlider()">
+    <div class="slider-value">Target Avg: <span id="sliderValueDisplay">0</span></div>
+  </div>
+
+  <button onclick="calculateAdditionalQty()">Calculate</button>
+
+  <div class="result" id="result"></div>
+
+  <script>
+    async function fetchMarketPrice() {
+      const symbol = document.getElementById('symbol').value.trim().toUpperCase();
+      if (!symbol) {
+        document.getElementById('result').innerText = "⚠️ Please enter a token symbol.";
+        return;
+      }
+
+      try {
+        const res = await fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`);
+        if (!res.ok) throw new Error('Token not found');
+        const data = await res.json();
+        const price = parseFloat(data.price);
+        document.getElementById('newPrice').value = price.toFixed(6); // update new price field
+        document.getElementById('result').innerText = `✅ Current market price for ${symbol} is ${price}`;
+        updateSliderBounds(); // update slider if it's active
+      } catch (error) {
+        document.getElementById('result').innerText = "❌ Error fetching price. Check token symbol (e.g. BTCUSDT).";
+      }
+    }
+
+    function toggleTargetMode() {
+      const manualEnabled = document.getElementById('manualToggle').checked;
+      document.getElementById('manualTargetContainer').style.display = manualEnabled ? 'block' : 'none';
+      document.getElementById('sliderTargetContainer').style.display = manualEnabled ? 'none' : 'block';
+
+      if (!manualEnabled) {
+        updateSliderBounds();
+      }
+    }
+
+    function updateSliderBounds() {
+      const entryPrice = parseFloat(document.getElementById('entryPrice').value);
+      const newPrice = parseFloat(document.getElementById('newPrice').value);
+
+      if (isNaN(entryPrice) || isNaN(newPrice)) {
+        document.getElementById('result').innerText = "⚠️ Please enter valid Entry and Market prices first.";
+        return;
+      }
+
+      const min = Math.min(entryPrice, newPrice);
+      const max = Math.max(entryPrice, newPrice);
+
+      const slider = document.getElementById('targetSlider');
+      slider.min = min;
+      slider.max = max;
+      const mid = ((min + max) / 2).toFixed(6);
+      slider.value = mid;
+      document.getElementById('sliderValueDisplay').innerText = mid;
+    }
+
+    function updateTargetFromSlider() {
+      const value = document.getElementById('targetSlider').value;
+      document.getElementById('sliderValueDisplay').innerText = parseFloat(value).toFixed(6);
+    }
+
+    function calculateAdditionalQty() {
+      const entryPrice = parseFloat(document.getElementById('entryPrice').value);
+      const quantity = parseFloat(document.getElementById('quantity').value);
+      const newPrice = parseFloat(document.getElementById('newPrice').value);
+      const manualMode = document.getElementById('manualToggle').checked;
+      const targetAverage = manualMode
+        ? parseFloat(document.getElementById('targetAverage').value)
+        : parseFloat(document.getElementById('targetSlider').value);
+
+      if (
+        isNaN(entryPrice) || isNaN(quantity) ||
+        isNaN(newPrice) || isNaN(targetAverage)
+      ) {
+        document.getElementById('result').innerText = "⚠️ Please fill in all fields with valid numbers.";
+        return;
+      }
+
+      if (targetAverage === newPrice) {
+        document.getElementById('result').innerText =
+          "⚠️ Target average price cannot be the same as the new price. It's mathematically impossible.";
+        return;
+      }
+
+      const x = ((entryPrice * quantity) - (targetAverage * quantity)) / (targetAverage - newPrice);
+
+      if (x < 0) {
+        document.getElementById('result').innerText =
+          "⚠️ Target average price is not achievable at this market price.";
+      } else {
+        document.getElementById('result').innerText =
+          `✅ You need to add approximately ${x.toFixed(2)} units at ${newPrice} to average down to ${targetAverage}.`;
+      }
+    }
+  </script>
+
+</body>
+</html>
